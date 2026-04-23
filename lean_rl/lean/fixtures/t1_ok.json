@@ -1,0 +1,38 @@
+{
+  "id": "t1_ok",
+  "_expected": {
+    "ok": true,
+    "invariantsClosed": 3,
+    "violation": null,
+    "note": "T1 happy path: 1 deployment, 3 replicas v1, PDB minAvailable=2. Plan upgrades image to v2 and waits 2 ticks. The Lean model does not reschedule pods when the deployment image changes, so all 3 pods stay Running on their nodes; PDB / capacity / antiAffinity all hold throughout."
+  },
+  "state": {
+    "nodes": [
+      {"id": 1, "capacity": {"cpu": 4, "mem": 8}, "cordoned": false},
+      {"id": 2, "capacity": {"cpu": 4, "mem": 8}, "cordoned": false},
+      {"id": 3, "capacity": {"cpu": 4, "mem": 8}, "cordoned": false}
+    ],
+    "deployments": [
+      {
+        "id": 0,
+        "desired": 3,
+        "image": 1,
+        "request": {"cpu": 1, "mem": 1},
+        "minAvailable": 2,
+        "antiAffinity": false
+      }
+    ],
+    "pods": [
+      {"id": 0, "deployment": 0, "node": 1, "image": 1, "phase": "Running", "request": {"cpu": 1, "mem": 1}},
+      {"id": 1, "deployment": 0, "node": 2, "image": 1, "phase": "Running", "request": {"cpu": 1, "mem": 1}},
+      {"id": 2, "deployment": 0, "node": 3, "image": 1, "phase": "Running", "request": {"cpu": 1, "mem": 1}}
+    ],
+    "tick": 0
+  },
+  "plan": {
+    "actions": [
+      {"op": "setImage", "deployment": 0, "image": 2},
+      {"op": "wait", "ticks": 2}
+    ]
+  }
+}
