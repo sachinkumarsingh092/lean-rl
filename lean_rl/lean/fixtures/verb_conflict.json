@@ -1,0 +1,46 @@
+{
+  "mode": "verb",
+  "id": "verb_conflict",
+  "_expected": {
+    "ok": false,
+    "stage": "admission",
+    "reject": {"kind": "conflict", "have": 7, "got": 3},
+    "note": "Update with stale resourceVersion. Server has rv=7, client sent rv=3. K8s-style optimistic concurrency: reject with 409 Conflict."
+  },
+  "state": {
+    "nodes": [
+      {"id": 1, "capacity": {"cpu": 4, "mem": 8}, "cordoned": false}
+    ],
+    "deployments": [
+      {
+        "id": 0,
+        "desired": 1,
+        "image": 1,
+        "request": {"cpu": 1, "mem": 1},
+        "minAvailable": 0,
+        "antiAffinity": false,
+        "name": "api",
+        "ns": "default",
+        "resourceVersion": 7
+      }
+    ],
+    "pods": [],
+    "tick": 0
+  },
+  "verb": {
+    "op": "updateDeployment",
+    "key": {"kind": "deployment", "ns": "default", "name": "api"},
+    "resourceVersion": 3,
+    "spec": {
+      "id": 0,
+      "desired": 2,
+      "image": 2,
+      "request": {"cpu": 1, "mem": 1},
+      "minAvailable": 0,
+      "antiAffinity": false,
+      "name": "api",
+      "ns": "default",
+      "resourceVersion": 3
+    }
+  }
+}

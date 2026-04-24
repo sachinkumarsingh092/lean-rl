@@ -24,12 +24,15 @@ inductive PodPhase | Pending | Running | Terminating | Failed
   deriving DecidableEq, Repr
 
 structure Pod where
-  id          : PodId
-  deployment  : DeploymentId
-  node        : NodeId
-  image       : Image
-  phase       : PodPhase
-  request     : Resources
+  id              : PodId
+  deployment      : DeploymentId
+  node            : NodeId
+  image           : Image
+  phase           : PodPhase
+  request         : Resources
+  name            : String := ""
+  ns              : String := "default"
+  resourceVersion : Nat    := 0
   deriving DecidableEq, Repr
 
 structure Node where
@@ -39,12 +42,15 @@ structure Node where
   deriving DecidableEq, Repr
 
 structure Deployment where
-  id            : DeploymentId
-  desired       : Nat
-  image         : Image            -- target image
-  request       : Resources
-  minAvailable  : Nat              -- PDB
-  antiAffinity  : Bool             -- at most one pod per node if true
+  id              : DeploymentId
+  desired         : Nat
+  image           : Image            -- target image
+  request         : Resources
+  minAvailable    : Nat              -- PDB
+  antiAffinity    : Bool             -- at most one pod per node if true
+  name            : String := ""
+  ns              : String := "default"
+  resourceVersion : Nat    := 0
   deriving DecidableEq, Repr
 
 structure State where

@@ -1,0 +1,38 @@
+{
+  "mode": "verb",
+  "id": "verb_delete_running_pdb",
+  "_expected": {
+    "ok": false,
+    "stage": "admission",
+    "reject": {"kind": "forbiddenInvariant", "invariant": "pdb"},
+    "note": "Two Running pods, minAvailable=2. Deleting api-0 would leave 1 Running < 2. Admission must reject."
+  },
+  "state": {
+    "nodes": [
+      {"id": 1, "capacity": {"cpu": 4, "mem": 8}, "cordoned": false},
+      {"id": 2, "capacity": {"cpu": 4, "mem": 8}, "cordoned": false}
+    ],
+    "deployments": [
+      {
+        "id": 0,
+        "desired": 2,
+        "image": 1,
+        "request": {"cpu": 1, "mem": 1},
+        "minAvailable": 2,
+        "antiAffinity": false,
+        "name": "api",
+        "ns": "default",
+        "resourceVersion": 4
+      }
+    ],
+    "pods": [
+      {"id": 0, "deployment": 0, "node": 1, "image": 1, "phase": "Running", "request": {"cpu": 1, "mem": 1}, "name": "api-0", "ns": "default", "resourceVersion": 1},
+      {"id": 1, "deployment": 0, "node": 2, "image": 1, "phase": "Running", "request": {"cpu": 1, "mem": 1}, "name": "api-1", "ns": "default", "resourceVersion": 2}
+    ],
+    "tick": 0
+  },
+  "verb": {
+    "op": "deletePodByKey",
+    "key": {"kind": "pod", "ns": "default", "name": "api-0"}
+  }
+}
