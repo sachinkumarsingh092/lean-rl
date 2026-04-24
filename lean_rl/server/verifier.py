@@ -59,6 +59,15 @@ class VerbResult:
     raw: dict = field(default_factory=dict)
 
 
+@dataclass
+class GoalResult:
+    """Result of a goal-mode evaluation: did the state satisfy the goal?"""
+
+    ok: bool
+    achieved: bool
+    raw: dict = field(default_factory=dict)
+
+
 class LeanVerifier:
     """Long-lived Lean subprocess; one call per line."""
 
@@ -125,6 +134,21 @@ class LeanVerifier:
             stage=str(data["stage"]),
             reject=data.get("reject"),
             applied_state=data.get("appliedState"),
+            raw=data,
+        )
+
+    # ---- goal mode (episode termination predicate) ------------------------
+
+    def verify_goal(self, state: dict, goal: dict, req_id: str = "") -> GoalResult:
+        data = self._roundtrip({
+            "mode": "goal",
+            "id": req_id,
+            "state": state,
+            "goal": goal,
+        })
+        return GoalResult(
+            ok=bool(data["ok"]),
+            achieved=bool(data.get("achieved", False)),
             raw=data,
         )
 

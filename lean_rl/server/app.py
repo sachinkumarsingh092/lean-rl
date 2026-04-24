@@ -36,18 +36,18 @@ except Exception as e:  # pragma: no cover
     ) from e
 
 try:
-    from ..models import LeanRlAction, LeanRlObservation
+    from ..models import SREAction, SREObservation
     from .lean_rl_environment import LeanRlEnvironment
-except ModuleNotFoundError:
-    from models import LeanRlAction, LeanRlObservation
+except ImportError:
+    from models import SREAction, SREObservation
     from server.lean_rl_environment import LeanRlEnvironment
 
 
 # Create the app with web interface and README integration
 app = create_app(
     LeanRlEnvironment,
-    LeanRlAction,
-    LeanRlObservation,
+    SREAction,
+    SREObservation,
     env_name="lean_rl",
     max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
 )

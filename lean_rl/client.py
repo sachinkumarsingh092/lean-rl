@@ -4,7 +4,13 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Lean Rl Environment Client."""
+"""Proved-SRE RL client.
+
+Wraps the OpenEnv HTTP/WS surface with typed action/observation. The
+agent emits an `SREAction` containing one Lean `ApiVerb`; the server
+returns an `SREObservation` with the projected state, the goal, and an
+action mask.
+"""
 
 from typing import Dict
 
@@ -12,71 +18,33 @@ from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
-from .models import LeanRlAction, LeanRlObservation
+from .models import SREAction, SREObservation
 
 
-class LeanRlEnv(
-    EnvClient[LeanRlAction, LeanRlObservation, State]
-):
-    """
-    Client for the Lean Rl Environment.
-
-    This client maintains a persistent WebSocket connection to the environment server,
-    enabling efficient multi-step interactions with lower latency.
-    Each client instance has its own dedicated environment session on the server.
+class LeanRlEnv(EnvClient[SREAction, SREObservation, State]):
+    """Client for the Proved-SRE RL environment.
 
     Example:
-        >>> # Connect to a running server
-        >>> with LeanRlEnv(base_url="http://localhost:8000") as client:
-        ...     result = client.reset()
-        ...     print(result.observation.echoed_message)
-        ...
-        ...     result = client.step(LeanRlAction(message="Hello!"))
-        ...     print(result.observation.echoed_message)
-
-    Example with Docker:
-        >>> # Automatically start container and connect
-        >>> client = LeanRlEnv.from_docker_image("lean_rl-env:latest")
-        >>> try:
-        ...     result = client.reset()
-        ...     result = client.step(LeanRlAction(message="Test"))
-        ... finally:
-        ...     client.close()
+        >>> with LeanRlEnv(base_url="http://localhost:8000") as env:
+        ...     obs = env.reset()
+        ...     verb = {"op": "deletePodByKey",
+        ...             "key": {"kind": "pod", "ns": "default", "name": "api-1"}}
+        ...     result = env.step(SREAction(verb=verb))
     """
 
-    def _step_payload(self, action: LeanRlAction) -> Dict:
-        """
-        Convert LeanRlAction to JSON payload for step message.
+    def _step_payload(self, action: SREAction) -> Dict:
+        return {"verb": action.verb}
 
-        Args:
-            action: LeanRlAction instance
-
-        Returns:
-            Dictionary representation suitable for JSON encoding
-        """
-        return {
-            "message": action.message,
-        }
-
-    def _parse_result(self, payload: Dict) -> StepResult[LeanRlObservation]:
-        """
-        Parse server response into StepResult[LeanRlObservation].
-
-        Args:
-            payload: JSON response data from server
-
-        Returns:
-            StepResult with LeanRlObservation
-        """
+    def _parse_result(self, payload: Dict) -> StepResult[SREObservation]:
         obs_data = payload.get("observation", {})
-        observation = LeanRlObservation(
-            echoed_message=obs_data.get("echoed_message", ""),
-            message_length=obs_data.get("message_length", 0),
+        observation = SREObservation(
+            state=obs_data.get("state", {}),
+            goal=obs_data.get("goal", {}),
+            mask=obs_data.get("mask", {}),
             done=payload.get("done", False),
             reward=payload.get("reward"),
             metadata=obs_data.get("metadata", {}),
         )
-
         return StepResult(
             observation=observation,
             reward=payload.get("reward"),
@@ -84,15 +52,6 @@ class LeanRlEnv(
         )
 
     def _parse_state(self, payload: Dict) -> State:
-        """
-        Parse server response into State object.
-
-        Args:
-            payload: JSON response from state request
-
-        Returns:
-            State object with episode_id and step_count
-        """
         return State(
             episode_id=payload.get("episode_id"),
             step_count=payload.get("step_count", 0),

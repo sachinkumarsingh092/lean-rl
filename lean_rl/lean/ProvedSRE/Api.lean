@@ -71,6 +71,50 @@ def removeNRunning : List Pod → DeploymentId → Nat → List Pod
       then removeNRunning ps dId k
       else p :: removeNRunning ps dId (k + 1)
 
+/-- Next free PodId: max existing id + 1 (1 if no pods). -/
+def nextPodId (s : State) : PodId :=
+  (s.pods.map (·.id)).foldl max 0 + 1
+
+/-- Pick a node for a new pod of deployment `d`. Prefer a non-cordoned node
+    not already hosting a live pod of `d` when `d.antiAffinity = true`.
+    Falls back to the first non-cordoned node, then any node, then 0. -/
+def pickNode (s : State) (d : Deployment) : NodeId :=
+  let busy : List NodeId :=
+    if d.antiAffinity then
+      (s.pods.filter (fun p => p.deployment = d.id ∧ p.phase ≠ .Failed)).map (·.node)
+    else []
+  let cands := s.nodes.filter (fun n => !n.cordoned ∧ !busy.contains n.id)
+  match cands with
+  | n :: _ => n.id
+  | []     =>
+      match s.nodes.filter (fun n => !n.cordoned) with
+      | n :: _ => n.id
+      | []     =>
+          match s.nodes with
+          | n :: _ => n.id
+          | []     => 0
+
+/-- Append one Pending pod for deployment `d`, deterministically. -/
+def addOnePod (s : State) (d : Deployment) : State :=
+  let newId := nextPodId s
+  let p : Pod := {
+    id              := newId,
+    deployment      := d.id,
+    node            := pickNode s d,
+    image           := d.image,
+    phase           := .Pending,
+    request         := d.request,
+    name            := s!"{d.name}-{newId}",
+    ns              := d.ns,
+    resourceVersion := nextRV s,
+  }
+  { s with pods := s.pods ++ [p] }
+
+/-- Append `k` Pending pods for deployment `d`. -/
+def addNPods : State → Deployment → Nat → State
+  | s, _, 0     => s
+  | s, d, k + 1 => addNPods (addOnePod s d) d k
+
 /-! ### apply
 
 Pure, deterministic state transition for a single verb. Bumps
@@ -100,8 +144,15 @@ def apply (s : State) : ApiVerb → State
                 else e }
           let runCount :=
             (s1.pods.filter (fun p => p.deployment = d.id ∧ p.phase = .Running)).length
-          let toRemove := runCount - n
-          { s1 with pods := removeNRunning s1.pods d.id toRemove }
+          if n ≥ runCount then
+            -- Scale up: append (n - runCount) Pending pods, deterministically
+            -- placed via `pickNode`. This matches kwok's controller observation
+            -- after re-projection (count + per-node placement) and lets
+            -- postCheck reject scale-ups that would violate capacity / anti-affinity.
+            addNPods s1 d (n - runCount)
+          else
+            -- Scale down: drop the first (runCount - n) Running pods.
+            { s1 with pods := removeNRunning s1.pods d.id (runCount - n) }
   | .deletePodByKey k =>
       { s with pods := s.pods.filter (fun p => ¬(p.ns = k.ns ∧ p.name = k.name)) }
 

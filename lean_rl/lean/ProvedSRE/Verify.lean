@@ -1,5 +1,6 @@
 import Lean.Data.Json
 import ProvedSRE.Soundness
+import ProvedSRE.Goals
 
 open Lean (Json FromJson ToJson fromJson? toJson)
 
@@ -387,6 +388,52 @@ private def verbWireError (id : String) (msg : String) : VerbResult :=
     reject := some (.parseError msg), appliedState := none }
 
 ----------------------------------------------------------------
+-- Goal-mode request/response
+----------------------------------------------------------------
+
+instance : ToJson Goal where
+  toJson
+    | .drainNode n        => jObj [("op", "drainNode"),    ("node", toJson n)]
+    | .rolloutImage d img => jObj [("op", "rolloutImage"), ("deployment", toJson d), ("image", toJson img)]
+    | .scaleTo d n        => jObj [("op", "scaleTo"),      ("deployment", toJson d), ("replicas", toJson n)]
+
+instance : FromJson Goal where
+  fromJson? j := do
+    let op ← j.getObjValAs? String "op"
+    match op with
+    | "drainNode"    => return .drainNode    (← j.getObjValAs? Nat "node")
+    | "rolloutImage" => return .rolloutImage (← j.getObjValAs? Nat "deployment")
+                                              (← j.getObjValAs? Nat "image")
+    | "scaleTo"      => return .scaleTo      (← j.getObjValAs? Nat "deployment")
+                                              (← j.getObjValAs? Nat "replicas")
+    | other          => .error s!"unknown goal op: {other}"
+
+structure GoalRequest where
+  id    : String := ""
+  state : State
+  goal  : Goal
+  deriving FromJson
+
+structure GoalResult where
+  id       : String
+  ok       : Bool := true
+  achieved : Bool
+
+instance : ToJson GoalResult where
+  toJson r := jObj [
+    ("mode",     toJson "goal"),
+    ("id",       toJson r.id),
+    ("ok",       toJson r.ok),
+    ("achieved", toJson r.achieved),
+  ]
+
+def runGoalRequest (req : GoalRequest) : GoalResult :=
+  { id := req.id, achieved := goalAchieved req.state req.goal }
+
+private def goalWireError (id : String) (_msg : String) : GoalResult :=
+  { id := id, ok := false, achieved := false }
+
+----------------------------------------------------------------
 -- Top-level dispatch
 ----------------------------------------------------------------
 
@@ -403,6 +450,10 @@ def handleLine (line : String) : Json :=
       match (fromJson? j : Except String VerbRequest) with
       | .error e => toJson (verbWireError (idFrom j) s!"schema error: {e}")
       | .ok req  => toJson (runVerbRequest req)
+    | "goal" =>
+      match (fromJson? j : Except String GoalRequest) with
+      | .error e => toJson (goalWireError (idFrom j) s!"schema error: {e}")
+      | .ok req  => toJson (runGoalRequest req)
     | _ =>
       match (fromJson? j : Except String Request) with
       | .error e => toJson (errorResult (idFrom j) s!"schema error: {e}")
