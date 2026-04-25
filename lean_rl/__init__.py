@@ -6,7 +6,10 @@
 
 """Proved-SRE RL environment."""
 
-from .client import LeanRlEnv
+try:
+    from .client import LeanRlEnv
+except ImportError:
+    LeanRlEnv = None
 from .models import SREAction, SREObservation
 
 __all__ = ["SREAction", "SREObservation", "LeanRlEnv"]
