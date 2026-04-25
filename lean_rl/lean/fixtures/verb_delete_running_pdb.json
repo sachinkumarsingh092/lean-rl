@@ -3,7 +3,7 @@
   "id": "verb_delete_running_pdb",
   "_expected": {
     "ok": false,
-    "stage": "admission",
+    "stage": "admission_rejected",
     "reject": {"kind": "forbiddenInvariant", "invariant": "pdb"},
     "note": "Two Running pods, minAvailable=2. Deleting api-0 would leave 1 Running < 2. Admission must reject."
   },

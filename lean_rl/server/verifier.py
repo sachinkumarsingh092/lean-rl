@@ -45,10 +45,10 @@ class VerbResult:
     """Result of a verb-mode (single ApiVerb) verification.
 
     `stage` is one of:
-        "wire"       - JSON parse / schema error before admission ran
-        "admission"  - admission rejected the verb (notFound, conflict,
-                       forbiddenInvariant, ...)
-        "applied"    - verb was admitted and applied; `applied_state`
+        "wire"               - JSON parse / schema error before admission ran
+        "admission_rejected" - admission rejected the verb (notFound, conflict,
+                               forbiddenInvariant, ...)
+        "applied"            - verb was admitted and applied; `applied_state`
                        holds the new cluster state
     """
 

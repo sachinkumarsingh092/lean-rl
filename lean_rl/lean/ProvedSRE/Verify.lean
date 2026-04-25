@@ -356,7 +356,7 @@ structure VerbRequest where
 structure VerbResult where
   id           : String
   ok           : Bool
-  stage        : String                -- "wire" | "admission" | "applied"
+  stage        : String                -- "wire" | "admission_rejected" | "applied"
   reject       : Option Reject := none
   appliedState : Option State  := none
 
@@ -377,7 +377,7 @@ instance : ToJson VerbResult where
 def runVerbRequest (req : VerbRequest) : VerbResult :=
   match admit req.state req.verb with
   | .error r =>
-      { id := req.id, ok := false, stage := "admission", reject := some r,
+      { id := req.id, ok := false, stage := "admission_rejected", reject := some r,
         appliedState := none }
   | .ok _ =>
       { id := req.id, ok := true, stage := "applied", reject := none,

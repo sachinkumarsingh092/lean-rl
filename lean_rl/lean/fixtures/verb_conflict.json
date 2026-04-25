@@ -3,7 +3,7 @@
   "id": "verb_conflict",
   "_expected": {
     "ok": false,
-    "stage": "admission",
+    "stage": "admission_rejected",
     "reject": {"kind": "conflict", "have": 7, "got": 3},
     "note": "Update with stale resourceVersion. Server has rv=7, client sent rv=3. K8s-style optimistic concurrency: reject with 409 Conflict."
   },

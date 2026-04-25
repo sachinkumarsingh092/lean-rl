@@ -398,7 +398,7 @@ _ADMISSION_PENALTY = {"parseError": -1.0, "schemaError": -1.0, "notFound": -0.2,
 def reward_from_verb(stage: str, reject: dict | None) -> float:
     if stage == "wire":
         return WIRE_PENALTY
-    if stage != "admission":
+    if stage != "admission_rejected":
         return 0.0
     kind = (reject or {}).get("kind", "")
     if kind == "forbiddenInvariant":

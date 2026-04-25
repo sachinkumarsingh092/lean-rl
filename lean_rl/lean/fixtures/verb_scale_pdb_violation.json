@@ -3,7 +3,7 @@
   "id": "verb_scale_pdb_violation",
   "_expected": {
     "ok": false,
-    "stage": "admission",
+    "stage": "admission_rejected",
     "reject": {"kind": "forbiddenInvariant", "invariant": "pdb"},
     "note": "Scaling Deployment 'api' from 3 to 1 with minAvailable=2 forces the synchronous scale-down to remove 2 Running pods, leaving 1 < 2. Admission must reject before any pod is removed."
   },
