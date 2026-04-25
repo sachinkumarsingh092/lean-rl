@@ -42,7 +42,7 @@ def _make_prompt(row: dict) -> dict:
         {"role": "user", "content": json.dumps({"state": row["state"], "goal": row["goal"]})},
     ]
     return {
-        "prompt": tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True),
+        "prompt": tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False),
         "state": json.dumps(row["state"]),
         "goal": json.dumps(row["goal"]),
     }
@@ -79,6 +79,8 @@ def reward_fn(completions: list[str], state: list[str], goal: list[str], **kwarg
         for verb in verbs[:8]:
             obs = _env.step(SREAction(verb=verb))
             total += obs.reward
+            if obs.metadata and obs.metadata.get("stage") == "applied":
+                total += 0.5
             if obs.done:
                 break
         rewards.append(total)
@@ -96,7 +98,7 @@ trainer = GRPOTrainer(
         num_train_epochs=3,
         per_device_train_batch_size=2,
         num_generations=4,
-        max_completion_length=512,
+        max_completion_length=1024,
         logging_steps=1,
         save_strategy="epoch",
     ),

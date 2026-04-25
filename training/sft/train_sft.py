@@ -8,7 +8,7 @@ from datasets import Dataset
 from unsloth import FastLanguageModel
 from trl import SFTTrainer, SFTConfig
 
-MODEL = "unsloth/Qwen3-1.7B-unsloth-bnb-4bit"
+MODEL = "unsloth/Qwen3-4B-unsloth-bnb-4bit"
 SEED_FILE = Path(__file__).resolve().parent / "seed_plans.jsonl"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 

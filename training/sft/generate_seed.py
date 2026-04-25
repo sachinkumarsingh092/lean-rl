@@ -16,7 +16,7 @@ from lean_rl.server.lean_rl_environment import sample_episode
 from lean_rl.server.verifier import LeanVerifier
 
 OUT = Path(__file__).resolve().parent / "seed_plans.jsonl"
-TARGET = 20
+TARGET = 100
 
 
 # ---- oracle planners ------------------------------------------------------
@@ -94,7 +94,7 @@ def main() -> None:
     rng = random.Random(42)
     results, attempts = [], 0
 
-    while len(results) < TARGET and attempts < 60:
+    while len(results) < TARGET and attempts < 300:
         attempts += 1
         ep = sample_episode(rng)
         state, goal = ep["initial_state"], ep["goal"]
