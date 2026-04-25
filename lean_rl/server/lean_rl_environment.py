@@ -292,73 +292,217 @@ class WorldKwok:
 
 # ---- Episode generator ----------------------------------------------------
 
+_DEP_NAMES = ["api", "web", "cache", "worker", "db", "proxy", "auth", "queue"]
+
 def sample_episode(rng: random.Random) -> dict:
-    """Randomly pick a drainNode or rolloutImage scenario."""
-    scenario = rng.choice(["drainNode", "rolloutImage"])
-    if scenario == "drainNode":
-        return _sample_drain_node(rng)
-    return _sample_rollout_image(rng)
+    """Randomly pick a scenario with varied parameters."""
+    scenario = rng.choice([
+        "drainNode", "drainNode",
+        "rolloutImage", "rolloutImage",
+        "scaleTo",
+        "multiDeployDrain",
+    ])
+    gen = {
+        "drainNode": _sample_drain_node,
+        "rolloutImage": _sample_rollout_image,
+        "scaleTo": _sample_scale_to,
+        "multiDeployDrain": _sample_multi_deploy_drain,
+    }[scenario]
+    return gen(rng)
+
+
+def _rand_capacity(rng: random.Random) -> dict:
+    cpu = rng.choice([2, 4, 8])
+    mem = rng.choice([4, 8, 16])
+    return {"cpu": cpu, "mem": mem}
+
+
+def _rand_request(rng: random.Random, cap: dict) -> dict:
+    cpu = rng.randint(1, max(1, cap["cpu"] // 2))
+    mem = rng.randint(1, max(1, cap["mem"] // 4))
+    return {"cpu": cpu, "mem": mem}
 
 
 def _sample_drain_node(rng: random.Random) -> dict:
-    """3 nodes, 2-pod anti-affinity deployment, pick one node to drain.
-    PDB minAvailable=1 so at most one pod can be gone at a time.
-    """
-    n_nodes = 3
+    n_nodes = rng.randint(2, 5)
     target = rng.randrange(n_nodes)
+    cap = _rand_capacity(rng)
     nodes = [
-        {"id": i, "capacity": {"cpu": 4, "mem": 8}, "cordoned": False}
+        {"id": i, "capacity": cap, "cordoned": False}
         for i in range(n_nodes)
     ]
-    deployments = [{
-        "id": 0, "desired": 2, "image": 1,
-        "request": {"cpu": 1, "mem": 1},
-        "minAvailable": 1, "antiAffinity": True,
-        "name": "api", "ns": "default", "resourceVersion": 1,
-    }]
-    other = (target + 1) % n_nodes
-    pods = [
-        {"id": 0, "deployment": 0, "node": other, "image": 1,
-         "phase": "Running", "request": {"cpu": 1, "mem": 1},
-         "name": "api-0", "ns": "default", "resourceVersion": 2},
-        {"id": 1, "deployment": 0, "node": target, "image": 1,
-         "phase": "Running", "request": {"cpu": 1, "mem": 1},
-         "name": "api-1", "ns": "default", "resourceVersion": 3},
-    ]
+
+    n_deps = rng.randint(1, min(3, n_nodes))
+    deployments, pods = [], []
+    pod_id, rv = 0, 1
+    for d in range(n_deps):
+        req = _rand_request(rng, cap)
+        n_pods = rng.randint(1, min(4, n_nodes))
+        anti = rng.choice([True, False]) if n_pods <= n_nodes else False
+        min_avail = rng.randint(1, max(1, n_pods - 1))
+        dep_name = _DEP_NAMES[d % len(_DEP_NAMES)]
+        rv += 1
+        deployments.append({
+            "id": d, "desired": n_pods, "image": 1,
+            "request": req,
+            "minAvailable": min_avail, "antiAffinity": anti,
+            "name": dep_name, "ns": "default", "resourceVersion": rv,
+        })
+        available_nodes = [i for i in range(n_nodes)]
+        for p in range(n_pods):
+            if anti:
+                node = available_nodes[p % len(available_nodes)]
+            else:
+                node = rng.choice(available_nodes)
+            rv += 1
+            pods.append({
+                "id": pod_id, "deployment": d, "node": node, "image": 1,
+                "phase": "Running", "request": req,
+                "name": f"{dep_name}-{p}", "ns": "default", "resourceVersion": rv,
+            })
+            pod_id += 1
+
     return {
         "initial_state": {"nodes": nodes, "deployments": deployments, "pods": pods, "tick": 0},
         "goal": {"op": "drainNode", "node": target},
-        "max_steps": 8,
+        "max_steps": 10,
     }
 
 
 def _sample_rollout_image(rng: random.Random) -> dict:
-    """2 nodes, 1 deployment running old image; goal is to roll all pods to a new image.
-    The agent must updateDeployment to the new image, then cycle pods.
-    """
-    old_img, new_img = 1, 2
-    n_nodes = 2
+    old_img = rng.randint(1, 3)
+    new_img = old_img + rng.randint(1, 2)
+    n_nodes = rng.randint(2, 4)
+    cap = _rand_capacity(rng)
     nodes = [
-        {"id": i, "capacity": {"cpu": 4, "mem": 8}, "cordoned": False}
+        {"id": i, "capacity": cap, "cordoned": False}
         for i in range(n_nodes)
     ]
-    n_pods = rng.choice([2, 3])
+    n_pods = rng.randint(2, min(5, n_nodes * (cap["cpu"] // 1)))
+    req = _rand_request(rng, cap)
+    anti = rng.choice([True, False]) if n_pods <= n_nodes else False
+    min_avail = rng.randint(1, max(1, n_pods - 1))
+    dep_name = rng.choice(_DEP_NAMES)
     deployments = [{
         "id": 0, "desired": n_pods, "image": old_img,
-        "request": {"cpu": 1, "mem": 1},
-        "minAvailable": 1, "antiAffinity": False,
-        "name": "web", "ns": "default", "resourceVersion": 1,
+        "request": req,
+        "minAvailable": min_avail, "antiAffinity": anti,
+        "name": dep_name, "ns": "default", "resourceVersion": 1,
     }]
-    pods = [
-        {"id": i, "deployment": 0, "node": i % n_nodes, "image": old_img,
-         "phase": "Running", "request": {"cpu": 1, "mem": 1},
-         "name": f"web-{i}", "ns": "default", "resourceVersion": i + 2}
-        for i in range(n_pods)
-    ]
+    pods = []
+    available_nodes = list(range(n_nodes))
+    for i in range(n_pods):
+        if anti:
+            node = available_nodes[i % len(available_nodes)]
+        else:
+            node = rng.choice(available_nodes)
+        pods.append({
+            "id": i, "deployment": 0, "node": node, "image": old_img,
+            "phase": "Running", "request": req,
+            "name": f"{dep_name}-{i}", "ns": "default", "resourceVersion": i + 2,
+        })
     return {
         "initial_state": {"nodes": nodes, "deployments": deployments, "pods": pods, "tick": 0},
         "goal": {"op": "rolloutImage", "deployment": 0, "image": new_img},
-        "max_steps": 10,
+        "max_steps": 2 * n_pods + 3,
+    }
+
+
+def _sample_scale_to(rng: random.Random) -> dict:
+    n_nodes = rng.randint(2, 4)
+    cap = _rand_capacity(rng)
+    nodes = [
+        {"id": i, "capacity": cap, "cordoned": False}
+        for i in range(n_nodes)
+    ]
+    req = _rand_request(rng, cap)
+    max_per_node = cap["cpu"] // req["cpu"]
+    total_capacity = n_nodes * max_per_node
+    current_pods = rng.randint(1, min(4, total_capacity))
+    direction = rng.choice(["up", "down"])
+    if direction == "up":
+        upper = min(current_pods + 3, total_capacity)
+        if upper <= current_pods:
+            target_pods = current_pods + 1
+        else:
+            target_pods = rng.randint(current_pods + 1, upper)
+    else:
+        if current_pods <= 1:
+            target_pods = 2
+            direction = "up"
+        else:
+            target_pods = rng.randint(max(1, current_pods - 2), current_pods - 1)
+    dep_name = rng.choice(_DEP_NAMES)
+    anti = rng.choice([True, False]) if current_pods <= n_nodes else False
+    min_avail = rng.randint(1, max(1, min(current_pods, target_pods) - 1)) \
+        if min(current_pods, target_pods) > 1 else 1
+    deployments = [{
+        "id": 0, "desired": current_pods, "image": 1,
+        "request": req,
+        "minAvailable": min_avail, "antiAffinity": anti,
+        "name": dep_name, "ns": "default", "resourceVersion": 1,
+    }]
+    available_nodes = list(range(n_nodes))
+    pods = []
+    for i in range(current_pods):
+        if anti:
+            node = available_nodes[i % len(available_nodes)]
+        else:
+            node = rng.choice(available_nodes)
+        pods.append({
+            "id": i, "deployment": 0, "node": node, "image": 1,
+            "phase": "Running", "request": req,
+            "name": f"{dep_name}-{i}", "ns": "default", "resourceVersion": i + 2,
+        })
+    return {
+        "initial_state": {"nodes": nodes, "deployments": deployments, "pods": pods, "tick": 0},
+        "goal": {"op": "scaleTo", "deployment": 0, "replicas": target_pods},
+        "max_steps": abs(target_pods - current_pods) + 4,
+    }
+
+
+def _sample_multi_deploy_drain(rng: random.Random) -> dict:
+    """Multiple deployments sharing nodes; drain one node."""
+    n_nodes = rng.randint(3, 5)
+    target = rng.randrange(n_nodes)
+    cap = _rand_capacity(rng)
+    nodes = [
+        {"id": i, "capacity": cap, "cordoned": False}
+        for i in range(n_nodes)
+    ]
+    n_deps = rng.randint(2, 3)
+    deployments, pods = [], []
+    pod_id, rv = 0, 1
+    for d in range(n_deps):
+        req = _rand_request(rng, cap)
+        n_pods = rng.randint(2, min(4, n_nodes))
+        anti = rng.choice([True, False]) if n_pods <= n_nodes else False
+        min_avail = rng.randint(1, max(1, n_pods - 1))
+        dep_name = _DEP_NAMES[d % len(_DEP_NAMES)]
+        rv += 1
+        deployments.append({
+            "id": d, "desired": n_pods, "image": 1,
+            "request": req,
+            "minAvailable": min_avail, "antiAffinity": anti,
+            "name": dep_name, "ns": "default", "resourceVersion": rv,
+        })
+        available_nodes = list(range(n_nodes))
+        for p in range(n_pods):
+            if anti:
+                node = available_nodes[p % len(available_nodes)]
+            else:
+                node = rng.choice(available_nodes)
+            rv += 1
+            pods.append({
+                "id": pod_id, "deployment": d, "node": node, "image": 1,
+                "phase": "Running", "request": req,
+                "name": f"{dep_name}-{p}", "ns": "default", "resourceVersion": rv,
+            })
+            pod_id += 1
+    return {
+        "initial_state": {"nodes": nodes, "deployments": deployments, "pods": pods, "tick": 0},
+        "goal": {"op": "drainNode", "node": target},
+        "max_steps": pod_id + 4,
     }
 
 # ---- Reward ---------------------------------------------------------------

@@ -82,11 +82,9 @@ def reward_fn(completions: list[str], state: list[str], goal: list[str], **kwarg
                 continue
             obs = _env.step(SREAction(verb=verb))
             total += obs.reward
-            if obs.metadata and obs.metadata.get("stage") == "applied":
-                total += 0.5
             if obs.done:
                 break
-        rewards.append(total)
+        rewards.append(max(min(total, 6.0), -3.0))
     return rewards
 
 # -- train --------------------------------------------------------------------
@@ -100,10 +98,14 @@ trainer = GRPOTrainer(
         output_dir=str(OUT_DIR),
         num_train_epochs=3,
         per_device_train_batch_size=2,
-        num_generations=4,
+        gradient_accumulation_steps=4,
+        num_generations=8,
         max_completion_length=1024,
         logging_steps=1,
         save_strategy="epoch",
+        beta=0.1,
+        learning_rate=5e-6,
+        warmup_steps=20,
     ),
 )
 trainer.train()
