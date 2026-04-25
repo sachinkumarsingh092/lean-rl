@@ -56,8 +56,13 @@ _env = LeanRlEnvironment()
 def reward_fn(completions: list[str], state: list[str], goal: list[str], **kwargs) -> list[float]:
     rewards = []
     for text, s_json, g_json in zip(completions, state, goal):
+        text = text.strip()
+        start, end = text.find('['), text.rfind(']')
+        if start == -1 or end == -1:
+            rewards.append(-2.0)
+            continue
         try:
-            verbs = json.loads(text)
+            verbs = json.loads(text[start:end + 1])
             if not isinstance(verbs, list):
                 verbs = [verbs]
         except (json.JSONDecodeError, TypeError):
