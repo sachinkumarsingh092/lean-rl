@@ -77,6 +77,9 @@ def reward_fn(completions: list[str], state: list[str], goal: list[str], **kwarg
 
         total = 0.0
         for verb in verbs[:8]:
+            if not isinstance(verb, dict):
+                total += -1.0
+                continue
             obs = _env.step(SREAction(verb=verb))
             total += obs.reward
             if obs.metadata and obs.metadata.get("stage") == "applied":
