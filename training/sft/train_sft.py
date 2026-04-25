@@ -31,7 +31,7 @@ def to_chat(row: dict) -> dict:
         {"role": "user", "content": json.dumps({"state": row["state"], "goal": row["goal"]})},
         {"role": "assistant", "content": json.dumps(row["verbs"])},
     ]
-    return {"text": tokenizer.apply_chat_template(messages, tokenize=False)}
+    return {"text": tokenizer.apply_chat_template(messages, tokenize=False, enable_thinking=False)}
 
 
 rows = [json.loads(l) for l in SEED_FILE.read_text().splitlines() if l.strip()]
@@ -40,8 +40,8 @@ ds = Dataset.from_list([to_chat(r) for r in rows])
 trainer = SFTTrainer(
     model=model, tokenizer=tokenizer, train_dataset=ds,
     args=SFTConfig(
-        output_dir=str(OUT_DIR), num_train_epochs=5,
-        per_device_train_batch_size=2, learning_rate=2e-4,
+        output_dir=str(OUT_DIR), num_train_epochs=10,
+        per_device_train_batch_size=2, learning_rate=1e-4,
         logging_steps=1, save_strategy="epoch",
     ),
 )
