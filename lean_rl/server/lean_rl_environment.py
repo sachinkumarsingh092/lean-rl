@@ -9,16 +9,18 @@
 Architecture:
     agent -> SREAction (one ApiVerb)
           -> Lean.verify_verb            (judge: admit / reject)
-          -> world.apply_admitted        (kwok or pure-Lean)
-          -> world.project_state         (re-read; never trust Lean's predicted state)
+          -> kwok.apply_admitted         (kubectl executes on real cluster)
+          -> kwok.project_state          (re-read; never trust Lean's predicted state)
           -> Lean.verify_goal            (episode termination)
           -> reward + mask + snapshot
+
+    Lean  = judge    (formal verification of invariants)
+    kwok  = world    (source of truth for cluster state)
 
 This file deliberately keeps every concern as one small function or class
 in one place. Split only if a piece grows beyond ~50 lines.
 
 Configuration via env vars:
-    WORLD_BACKEND   "lean" (default) | "kwok"
     SRE_SEED        int; deterministic episode generation when set
     SRE_RUNS_DIR    if set, JSONL trajectories are written under this dir
 """
@@ -45,27 +47,7 @@ except ImportError:
     from server.verifier import LeanVerifier
 
 
-# ---- World backends -------------------------------------------------------
-
-class WorldLean:
-    """Pure-Lean world: Lean's `apply` IS the world. Deterministic, no infra."""
-
-    def __init__(self) -> None:
-        self._state: dict[str, Any] = {"nodes": [], "deployments": [], "pods": [], "tick": 0}
-
-    def reset(self, initial: dict) -> None:
-        self._state = initial
-
-    def project_state(self) -> dict:
-        return self._state
-
-    def apply_admitted(self, verb: dict, lean_post: dict) -> None:
-        # Trusted because Lean's apply IS the world here.
-        self._state = lean_post
-
-    def wait_quiescent(self) -> bool:
-        return True
-
+# ---- World (kwok) ---------------------------------------------------------
 
 class WorldKwok:
     """kwok-backed world. Bring up a cluster once with `kwokctl create cluster`
@@ -308,11 +290,6 @@ class WorldKwok:
         return False
 
 
-def make_world() -> "WorldLean | WorldKwok":
-    backend = os.getenv("WORLD_BACKEND", "kowk")
-    return WorldKwok() if backend == "kwok" else WorldLean()
-
-
 # ---- Episode generator ----------------------------------------------------
 
 def sample_episode(rng: random.Random) -> dict:
@@ -451,7 +428,7 @@ class TrajectoryWriter:
 # ---- Environment ----------------------------------------------------------
 
 class LeanRlEnvironment(Environment):
-    """Proved-SRE RL gym. Lean is the judge, the world (Lean or kwok) executes."""
+    """Proved-SRE RL gym. Lean is the judge, kwok is the world."""
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = False
 
@@ -459,7 +436,7 @@ class LeanRlEnvironment(Environment):
         seed = os.getenv("SRE_SEED")
         self._rng = random.Random(int(seed)) if seed else random.Random()
         self._verifier = LeanVerifier()
-        self._world = make_world()
+        self._world = WorldKwok()
         self._snap = TrajectoryWriter(os.getenv("SRE_RUNS_DIR"))
         self._episode: dict | None = None
         self._step_idx = 0
