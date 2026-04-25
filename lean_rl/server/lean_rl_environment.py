@@ -309,15 +309,23 @@ class WorldKwok:
 
 
 def make_world() -> "WorldLean | WorldKwok":
-    backend = os.getenv("WORLD_BACKEND", "lean")
+    backend = os.getenv("WORLD_BACKEND", "kowk")
     return WorldKwok() if backend == "kwok" else WorldLean()
 
 
 # ---- Episode generator ----------------------------------------------------
 
 def sample_episode(rng: random.Random) -> dict:
-    """A tiny drainNode scenario: 3 nodes, 2-pod anti-affinity deployment,
-    pick one node to drain. PDB minAvailable=1 so at most one pod can be gone.
+    """Randomly pick a drainNode or rolloutImage scenario."""
+    scenario = rng.choice(["drainNode", "rolloutImage"])
+    if scenario == "drainNode":
+        return _sample_drain_node(rng)
+    return _sample_rollout_image(rng)
+
+
+def _sample_drain_node(rng: random.Random) -> dict:
+    """3 nodes, 2-pod anti-affinity deployment, pick one node to drain.
+    PDB minAvailable=1 so at most one pod can be gone at a time.
     """
     n_nodes = 3
     target = rng.randrange(n_nodes)
@@ -346,6 +354,35 @@ def sample_episode(rng: random.Random) -> dict:
         "max_steps": 8,
     }
 
+
+def _sample_rollout_image(rng: random.Random) -> dict:
+    """2 nodes, 1 deployment running old image; goal is to roll all pods to a new image.
+    The agent must updateDeployment to the new image, then cycle pods.
+    """
+    old_img, new_img = 1, 2
+    n_nodes = 2
+    nodes = [
+        {"id": i, "capacity": {"cpu": 4, "mem": 8}, "cordoned": False}
+        for i in range(n_nodes)
+    ]
+    n_pods = rng.choice([2, 3])
+    deployments = [{
+        "id": 0, "desired": n_pods, "image": old_img,
+        "request": {"cpu": 1, "mem": 1},
+        "minAvailable": 1, "antiAffinity": False,
+        "name": "web", "ns": "default", "resourceVersion": 1,
+    }]
+    pods = [
+        {"id": i, "deployment": 0, "node": i % n_nodes, "image": old_img,
+         "phase": "Running", "request": {"cpu": 1, "mem": 1},
+         "name": f"web-{i}", "ns": "default", "resourceVersion": i + 2}
+        for i in range(n_pods)
+    ]
+    return {
+        "initial_state": {"nodes": nodes, "deployments": deployments, "pods": pods, "tick": 0},
+        "goal": {"op": "rolloutImage", "deployment": 0, "image": new_img},
+        "max_steps": 10,
+    }
 
 # ---- Reward ---------------------------------------------------------------
 
@@ -490,11 +527,23 @@ if __name__ == "__main__":
     env = LeanRlEnvironment()
     obs = env.reset()
     print("reset goal:", obs.goal)
-    target = obs.goal["node"]
-    pod_on_target = next(p for p in obs.state["pods"] if p["node"] == target)
-    obs = env.step(SREAction(verb={
-        "op": "deletePodByKey",
-        "key": {"kind": "pod", "ns": pod_on_target["ns"], "name": pod_on_target["name"]},
-    }))
+
+    if obs.goal["op"] == "drainNode":
+        target = obs.goal["node"]
+        pod_on_target = next(p for p in obs.state["pods"] if p["node"] == target)
+        verb = {
+            "op": "deletePodByKey",
+            "key": {"kind": "pod", "ns": pod_on_target["ns"], "name": pod_on_target["name"]},
+        }
+    else:
+        dep = obs.state["deployments"][0]
+        verb = {
+            "op": "updateDeployment",
+            "key": {"kind": "deployment", "ns": dep["ns"], "name": dep["name"]},
+            "resourceVersion": dep["resourceVersion"],
+            "spec": {**dep, "image": obs.goal["image"]},
+        }
+
+    obs = env.step(SREAction(verb=verb))
     print("step:", "reward=", obs.reward, "done=", obs.done, "info=", obs.metadata)
     env._verifier.close()

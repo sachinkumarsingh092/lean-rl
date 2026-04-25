@@ -35,7 +35,7 @@ curl -L "https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSIO
 ENV ELAN_HOME=/root/.elan
 ENV PATH=${ELAN_HOME}/bin:${PATH}
 RUN curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf \
-| sh -s -- -y --default-toolchain leanprover/lean4:v4.12.0
+| sh -s -- -y --default-toolchain leanprover/lean4:v4.29.0
 
 # Build the Lean verifier project once at image build time
 COPY lean_rl/lean /app/lean
