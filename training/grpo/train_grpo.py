@@ -108,7 +108,8 @@ trainer = GRPOTrainer(
         beta=0.1,
         learning_rate=5e-6,
         warmup_steps=20,
-        temperature=0.7,
+        temperature=1.0,
+        top_p=0.95,
     ),
 )
 trainer.train()
