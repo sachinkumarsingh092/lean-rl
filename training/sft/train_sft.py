@@ -40,7 +40,7 @@ ds = Dataset.from_list([to_chat(r) for r in rows])
 trainer = SFTTrainer(
     model=model, tokenizer=tokenizer, train_dataset=ds,
     args=SFTConfig(
-        output_dir=str(OUT_DIR), num_train_epochs=10,
+        output_dir=str(OUT_DIR), num_train_epochs=2,
         per_device_train_batch_size=2, learning_rate=1e-4,
         logging_steps=1, save_strategy="epoch",
     ),
