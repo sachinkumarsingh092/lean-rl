@@ -21,9 +21,6 @@ structure ObjectKey where
   name : String
   deriving DecidableEq, Repr
 
-inductive InvariantKind | pdb | capacity | antiAffinity
-  deriving DecidableEq, Repr
-
 inductive ApiVerb
   | createPod         (spec : Pod)
   | createDeployment  (spec : Deployment)
@@ -184,18 +181,15 @@ def preCheck (s : State) : ApiVerb → Except Reject Unit
       | none   => .error (.notFound k)
       | some _ => .ok ()
 
+def invariantReason : InvariantKind → String
+  | .pdb          => "would violate PodDisruptionBudget minAvailable"
+  | .capacity     => "would exceed node capacity"
+  | .antiAffinity => "would violate anti-affinity (multiple pods of same deployment on one node)"
+
 def postCheck (s' : State) (v : ApiVerb) : Except Reject Unit :=
-  if !pdbRespected s' then
-    .error (.forbiddenInvariant .pdb (verbTarget v)
-              "would violate PodDisruptionBudget minAvailable")
-  else if !capacityRespected s' then
-    .error (.forbiddenInvariant .capacity (verbTarget v)
-              "would exceed node capacity")
-  else if !antiAffinityRespected s' then
-    .error (.forbiddenInvariant .antiAffinity (verbTarget v)
-              "would violate anti-affinity (multiple pods of same deployment on one node)")
-  else
-    .ok ()
+  invariants.foldlM (init := ()) fun _ ⟨ik, p⟩ =>
+    if p s' then .ok ()
+    else .error (.forbiddenInvariant ik (verbTarget v) (invariantReason ik))
 
 def admit (s : State) (v : ApiVerb) : Except Reject Unit :=
   match preCheck s v with

@@ -22,7 +22,12 @@ def antiAffinityRespected (s : State) : Bool :=
     let nodes := pods.map (·.node)
     nodes.length = nodes.eraseDups.length
 
-def safe (s : State) : Bool :=
-  pdbRespected s && capacityRespected s && antiAffinityRespected s
+inductive InvariantKind | pdb | capacity | antiAffinity
+  deriving DecidableEq, Repr
+
+def invariants : List (InvariantKind × (State → Bool)) :=
+  [ (.pdb, pdbRespected), (.capacity, capacityRespected), (.antiAffinity, antiAffinityRespected) ]
+
+def safe (s : State) : Bool := invariants.all (·.2 s)
 
 end SRE
