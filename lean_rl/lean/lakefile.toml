@@ -1,0 +1,10 @@
+name = "ProvedSRE"
+version = "0.1.0"
+defaultTargets = ["provedsre"]
+
+[[lean_lib]]
+name = "ProvedSRE"
+
+[[lean_exe]]
+name = "provedsre"
+root = "ProvedSRE.Verify"
