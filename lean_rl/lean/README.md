@@ -1,5 +1,18 @@
 # ProvedSRE
 
+## Overview
+`ProvedSRE` is a Lean 4 model of a small Kubernetes-style admission
+controller. It defines a cluster `State` (nodes, pods, deployments),
+an `ApiVerb` surface (create / update / scale / delete), and a list
+of safety `invariants` (PodDisruptionBudget, node capacity, and
+anti-affinity). The `admit` gate dry-runs each verb through `apply`
+and re-checks every invariant before committing. Soundness is proved
+in `ProvedSRE/Soundness.lean`: any plan accepted by `admit` is
+guaranteed to leave the cluster in a `safe` state, giving an LLM-
+emitted action plan a machine-checked safety guarantee.
+
+See the full report here: - [Report](../../reports/00-checkpoint/talk.pdf)
+
 ## Origin
 This project was built during the **LeanLang for Verified
 Autonomy Hackathon** (April 17–18 + online through May 1,
@@ -24,3 +37,4 @@ and mentorship
 hackathon-april2026.html)
 - [Emergence India Labs](https://east.emergence.ai)
 - [Emergence AI](https://www.emergence.ai)
+
